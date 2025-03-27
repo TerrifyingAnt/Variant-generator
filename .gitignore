@@ -6,4 +6,5 @@ vars
 lp_detailed_solutions.json
 lp_problems.json
 multiple_transport_tasks.json
-
+variants_pdf
+variants.json
