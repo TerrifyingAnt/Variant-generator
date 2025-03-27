@@ -1,72 +1,168 @@
 import json
-from reportlab.lib.pagesizes import letter
+import os
+import numpy as np
+from reportlab.lib.pagesizes import letter, A4
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from ProblemScene import *
 from PIL import Image
-import os
+from second_task.TransportTaskScene import generate_transport_task_image
+from second_task.LPProblemScene import generate_lp_problem_image
 
 # Регистрация шрифта Arial, который поддерживает кириллицу
-pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
+try:
+    pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
+    font_name = 'Arial'
+except:
+    # Если Arial не найден, используем стандартный шрифт
+    font_name = 'Helvetica'
 
-def create_pdf(data):
-    for idx, el in enumerate(data):
-        c = canvas.Canvas(f"vars/Вариант {idx+1}.pdf", pagesize=letter)
-        width, height = letter
-        y = height - 50 
+def create_variants_pdf(variants_data, output_dir="variants_pdf"):
+    """
+    Создает PDF-файлы с вариантами заданий.
+    
+    Параметры:
+    variants_data (dict): Данные вариантов с задачами
+    output_dir (str): Директория для сохранения PDF-файлов
+    """
+    # Создаем директорию для PDF, если она не существует
+    os.makedirs(output_dir, exist_ok=True)
+    # Создаем директорию для изображений, если она не существует
+    os.makedirs("task_images", exist_ok=True)
+    
+    variants = variants_data["variants"]
+    
+    for variant in variants:
+        variant_number = variant["variant_number"]
+        pdf_path = f"{output_dir}/Вариант_{variant_number}.pdf"
         
-        # Заголовок
-        title_text = f"Контрольная работа номер 1, вариант {idx + 1}"
-        c.setFont("Arial", 14)  # Установка шрифта Arial
-        c.drawString(50, y, title_text)
-        y -= 20
-        c.drawString(50, y, "Задача №1")
-        y -= 20  # Space before image
+        # Создаем PDF для текущего варианта
+        c = canvas.Canvas(pdf_path, pagesize=A4)
+        width, height = A4
+        y = height - 50  # Начальная позиция Y
         
-        # Generate the image
-        image_path = f"problem_{idx}.png"
-        scene = ProblemScene()
-        scene.construct(el, image_path)
+        # Заголовок варианта
+        c.setFont(font_name, 14)
+        title_text = f"Контрольная работа. Вариант {variant_number}"
+        c.drawString(70, y, title_text)  # Увеличиваем отступ с 50 до 70
+        y -= 40  # Увеличиваем отступ с 30 до 40
         
-        # Get the image dimensions
-        img_path = os.path.join("task_images", image_path)
-        if os.path.exists(img_path):
-            img = Image.open(img_path)
-            img_width, img_height = img.size
+        # Обрабатываем задачи в варианте
+        for task in variant["tasks"]:
+            task_number = task["task_number"]
+            task_data = task["task_data"]
+            task_type = task_data["type"]
             
-            # Calculate the height in PDF points (maintaining aspect ratio)
-            display_width = 200  # Width we want to display in PDF
-            display_height = img_height * (display_width / img_width)
-            
-            # Draw the image
-            c.drawImage(img_path, 50, 470, width=200, preserveAspectRatio=True)
-
-            y -= (img_height * 200) / img_width
-
-            
-            # Update y position based on actual image height
-            #y -= (display_height + 20)  # Image height plus some padding
-        else:
-            # Fallback if image doesn't exist
-            c.drawString(50, y - 80, "Изображение отсутствует")
-            y -= 40  # Default offset if no image
-
-        # Добавление текста после изображения
-        tasks = [
-            "a) Решить задачу линейного программирования графически. Составить эквивалентную ",
-            "    каноническую задачу. (3 балла)",
-            "b) Записать задачу ЛП, двойственную данной. (2 балла)",
-            "c) Решить задачу ЛП симплекс-методом. (5 баллов)"
-        ]
-        c.setFont("Arial", 12)  # Установка шрифта Arial для текста заданий
-        for task in tasks:
-            c.drawString(50, y - 20, task)
+            # Заголовок задачи
+            c.setFont(font_name, 12)
+            c.drawString(70, y, f"Задача {task_number}.")  # Увеличиваем отступ с 50 до 70
             y -= 20
-        y -= 30  # Additional space between sections
+            
+            if task_type == "transport_task":
+                # Генерируем изображение для транспортной задачи
+                image_path = f"task_{variant_number}_{task_number}_transport.png"
+                generate_transport_task_image(task_data, image_path)
+                c.drawString(70, y - 15, "Для производства трех партий смартфонов используются батареи четырех")
+                c.drawString(70, y - 30, "производителей. Запасы батарей каждого производителя (аi), потребности")
+                c.drawString(70, y - 45, "в батареях для производства каждой партии смартфонов (bi) и стоимости")
+                c.drawString(70, y - 60, "заданы матрицей. Составить план покупки батарей, при котором потребности")
+                c.drawString(70, y - 75, "в них каждой партии смартфонов были бы удовлетворены при наименьшей общей")
+                c.drawString(70, y - 90, "стоимости. Решить задачу методом потенциалов.(5 баллов)")  # Перемещаем текст с изображения в PDF
+                y -= 260
+                
+                # Добавляем изображение
+                img_path = os.path.join("task_images", image_path)
+                if os.path.exists(img_path):
+                    img = Image.open(img_path)
+                    img_width, img_height = img.size
+                    
+                    # Масштабируем изображение, уменьшая размер
+                    display_width = min(width - 140, 250)  # Уменьшаем с 300 до 250 и увеличиваем отступы
+                    display_height = img_height * (display_width / img_width)
+                    
+                    # Проверяем, поместится ли изображение на текущей странице
+                    if y - display_height < 70:  # Увеличиваем нижний отступ с 50 до 70
+                        c.showPage()
+                        y = height - 70  # Увеличиваем верхний отступ с 50 до 70
+                    
+                    # Рисуем изображение с увеличенным левым отступом
+                    c.drawImage(img_path, 70, y - display_height, width=display_width, preserveAspectRatio=True)
+                else:
+                    c.drawString(70, y, "Изображение не найдено")  # Увеличиваем отступ с 50 до 70
 
+                                
+                y -= 20  # Увеличиваем отступ между задачами с 15 до 20
+                
+            elif task_type == "lp_problem":
+                # Генерируем изображение для задачи ЛП
+                image_path = f"task_{variant_number}_{task_number}_lp.png"
+                generate_lp_problem_image(task_data, image_path)
+                
+                # Добавляем описание задачи
+                c.setFont(font_name, 12)  
+                c.drawString(70, y, "Задача линейного программирования:")  # Увеличиваем отступ с 50 до 70
+                y -= 125
+                
+                # Добавляем изображение
+                img_path = os.path.join("task_images", image_path)
+                if os.path.exists(img_path):
+                    img = Image.open(img_path)
+                    img_width, img_height = img.size
+                    
+                    # Масштабируем изображение, уменьшая размер
+                    display_width = min(width - 140, 250)  # Уменьшаем с 300 до 250 и увеличиваем отступы
+                    display_height = img_height * (display_width / img_width)
+                    
+                    # Проверяем, поместится ли изображение на текущей странице
+                    if y - display_height < 70:  # Увеличиваем нижний отступ с 50 до 70
+                        c.showPage()
+                        y = height - 70  # Увеличиваем верхний отступ с 50 до 70
+                    
+                    # Рисуем изображение с увеличенным левым отступом
+                    c.drawImage(img_path, 70, y - display_height, width=display_width, preserveAspectRatio=True)
+                else:
+                    c.drawString(70, y, "Изображение не найдено")  # Увеличиваем отступ с 50 до 70
+                y -= 30
+                
+                # Добавляем задание
+                c.setFont(font_name, 12)  # Уменьшаем шрифт с 10 до 9
+                task_text = [
+                    "a) Решить задачу линейного программирования графически. (3 балла)",
+                    "b) Записать задачу ЛП, двойственную данной. (2 балла)",
+                    "c) Решить задачу ЛП симплекс-методом. (5 баллов)"
+                ]
+                for line in task_text:
+                    c.drawString(70, y, line)  # Увеличиваем отступ с 50 до 70
+                    y -= 15
+                
+                y -= 20  # Увеличиваем отступ между задачами с 15 до 20
+        
+        # Сохраняем PDF
         c.save()
+        print(f"Создан PDF-файл варианта {variant_number}: {pdf_path}")
 
-with open('lp_problems.json', 'r') as file:
-    data = json.load(file)
-    create_pdf(data)
+def generate_variants_pdf(variants_json_path, output_dir="variants_pdf"):
+    """
+    Генерирует PDF-файлы для всех вариантов из JSON-файла.
+    
+    Параметры:
+    variants_json_path (str): Путь к JSON-файлу с вариантами
+    output_dir (str): Директория для сохранения PDF-файлов
+    """
+    try:
+        with open(variants_json_path, 'r', encoding='utf-8') as f:
+            variants_data = json.load(f)
+        
+        create_variants_pdf(variants_data, output_dir)
+        print(f"Успешно сгенерированы PDF-файлы вариантов в директории {output_dir}")
+        
+    except FileNotFoundError:
+        print(f"Ошибка: файл {variants_json_path} не найден")
+    except json.JSONDecodeError:
+        print(f"Ошибка: не удалось декодировать JSON из файла {variants_json_path}")
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+
+if __name__ == "__main__":
+    # Пример использования
+    generate_variants_pdf("variants.json", "variants_pdf") 
